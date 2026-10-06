@@ -169,8 +169,12 @@ class DashboardService
         }
 
         // Group by wilayah (region) for the table
-        $byArea = $arrears->groupBy(fn ($arrear) => $arrear->customer->wilayah->name ?? 'Wilayah Tidak Diketahui')
-            ->map(function ($items, $wilayahNama) {
+        $byArea = $arrears->groupBy(fn ($arrear) => $arrear->customer->wilayah->id ?? $arrear->customer->wilayah->name ?? 'unknown')
+            ->map(function ($items) {
+                $firstItem = $items->first();
+                $wilayah = $firstItem->customer->wilayah ?? null;
+                $wilayahKode = $wilayah->code ?? '';
+                $wilayahNama = $wilayah->name ?? 'Wilayah Tidak Diketahui';
                 $totalSurat = $items->count();
                 $buktiFoto = $items->whereNotNull('foto_bukti')->where('foto_bukti', '!=', '')->count();
                 $sudahDikunjungi = $items->where('status', Arrear::STATUS_SUDAH_DIKUNJUNGI)->count();
@@ -180,9 +184,13 @@ class DashboardService
                 $lainnya = $items->where('visit.status_kunjungan', Visit::HASIL_LAINNYA)->count();
                 $belumDikunjungi = $items->where('status', Arrear::STATUS_BELUM_DIKUNJUNGI)->count();
                 $sisaSurat = $totalSurat - $sudahDikunjungi;
+                $totalNominal = $items->sum('jumlah_tagihan');
 
                 return [
+                    'wilayah_id' => $wilayah->id ?? null,
+                    'kode_wilayah' => $wilayahKode,
                     'wilayah_nama' => $wilayahNama,
+                    'total_nominal' => $totalNominal,
                     'jumlah_surat' => $totalSurat,
                     'bukti_foto' => $buktiFoto,
                     'surat_diterima' => $suratDiterima,

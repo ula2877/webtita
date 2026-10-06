@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   assignArrears,
   deleteArrear,
@@ -20,7 +21,7 @@ import { Input, Select, Combobox } from '../../components/ui/form'
 import { SearchInput } from '../../components/ui/SearchInput'
 import { Pagination } from '../../components/ui/Pagination'
 import { ErrorState, LoadingState, EmptyState } from '../../components/ui/feedback'
-import { HasilBadge, StatusBadge } from '../../components/ui/Badge'
+import { Badge, HasilBadge, StatusBadge } from '../../components/ui/Badge'
 import { Modal, ConfirmDialog } from '../../components/ui/Modal'
 
 function PhotoDisplay({ src, alt }: { src: string; alt: string }) {
@@ -230,11 +231,18 @@ interface EditForm {
 
 export function ArrearsPage() {
   const toast = useToast()
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const [search, setSearch] = useState('')
   const [periodId, setPeriodId] = useState<number | undefined>(undefined)
-  const [petugasFilterId, setPetugasFilterId] = useState<number | undefined>(undefined)
-  const [wilayahFilterId, setWilayahFilterId] = useState<number | undefined>(undefined)
+  const [petugasFilterId, setPetugasFilterId] = useState<number | undefined>(() => {
+    const val = searchParams.get('petugas_id')
+    return val ? Number(val) : undefined
+  })
+  const [wilayahFilterId, setWilayahFilterId] = useState<number | undefined>(() => {
+    const val = searchParams.get('wilayah_id')
+    return val ? Number(val) : undefined
+  })
   const [statusFilter, setStatusFilter] = useState('')
   const [hasilFilter, setHasilFilter] = useState('')
   const [page, setPage] = useState(1)
@@ -249,6 +257,7 @@ export function ArrearsPage() {
   const [error, setError] = useState('')
   const [petugasList, setPetugasList] = useState<Petugas[]>([])
   const [wilayahList, setWilayahList] = useState<Wilayah[]>([])
+  const [wilayahLoading, setWilayahLoading] = useState(false)
   const [periodList, setPeriodList] = useState<Period[]>([])
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [assignPetugasId, setAssignPetugasId] = useState('')
@@ -305,17 +314,60 @@ export function ArrearsPage() {
       .catch(() => {
         // filters remain usable without petugas data
       })
-    getWilayah({ per_page: 100 })
-      .then((result) => setWilayahList(result.data))
-      .catch(() => {
-        // filters remain usable without wilayah data
-      })
     getPeriods()
       .then(setPeriodList)
       .catch(() => {
         // filters remain usable without periods data
       })
   }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    setWilayahLoading(true)
+    setWilayahList([])
+    getWilayah({ per_page: 100, petugas_id: petugasFilterId })
+      .then((result) => {
+        if (cancelled) return
+        let list = result.data
+        // fallback client-side filter in case the API ignores petugas_id
+        if (petugasFilterId != null) {
+          const filtered = list.filter((w) => w.petugas?.id === petugasFilterId)
+          if (filtered.length > 0 || list.some((w) => w.petugas != null)) {
+            list = filtered
+          }
+        }
+        setWilayahList(list)
+        setWilayahFilterId((current) => {
+          if (current == null) return current
+          return list.some((w) => w.id === current) ? current : undefined
+        })
+      })
+      .catch(() => {
+        if (!cancelled) setWilayahList([])
+      })
+      .finally(() => {
+        if (!cancelled) setWilayahLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [petugasFilterId])
+
+  // Update URL search params when filters change (for petugas_id and wilayah_id)
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams)
+    if (petugasFilterId != null) {
+      params.set('petugas_id', String(petugasFilterId))
+    } else {
+      params.delete('petugas_id')
+    }
+    if (wilayahFilterId != null) {
+      params.set('wilayah_id', String(wilayahFilterId))
+    } else {
+      params.delete('wilayah_id')
+    }
+    setSearchParams(params, { replace: true })
+  }, [petugasFilterId, wilayahFilterId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function resetPage() {
     setPage(1)
@@ -563,7 +615,7 @@ export function ArrearsPage() {
             <Combobox
               name="wilayah_id"
               label="Wilayah"
-              placeholder="Semua Wilayah"
+              placeholder={wilayahLoading ? 'Memuat wilayah...' : 'Semua Wilayah'}
               value={wilayahFilterId ?? ''}
               onChange={(value) => {
                 setWilayahFilterId(value === '' ? undefined : Number(value))
@@ -711,15 +763,7 @@ export function ArrearsPage() {
                       <th className="px-4 py-3 font-medium">No</th>
                       <th className="px-4 py-3 font-medium">
                         <SortHeader
-                          label="No Sambungan"
-                          active={sort.field === 'no_sambungan'}
-                          order={sort.order}
-                          onClick={() => toggleSort('no_sambungan')}
-                        />
-                      </th>
-                      <th className="px-4 py-3 font-medium">
-                        <SortHeader
-                          label="Nama Pelanggan"
+                          label="Pelanggan"
                           active={sort.field === 'nama'}
                           order={sort.order}
                           onClick={() => toggleSort('nama')}
@@ -728,9 +772,9 @@ export function ArrearsPage() {
                       <th className="px-4 py-3 font-medium">
                         <SortHeader
                           label="Tunggakan"
-                          active={sort.field === 'jumlah_bulan_tunggakan'}
+                          active={sort.field === 'jumlah_tagihan'}
                           order={sort.order}
-                          onClick={() => toggleSort('jumlah_bulan_tunggakan')}
+                          onClick={() => toggleSort('jumlah_tagihan')}
                         />
                       </th>
                       <th className="px-4 py-3 font-medium">Petugas</th>
@@ -762,10 +806,16 @@ export function ArrearsPage() {
                         <td className="px-4 py-3 text-slate-500">
                           {(data.meta.current_page - 1) * data.meta.per_page + index + 1}
                         </td>
-                        <td className="px-4 py-3 font-medium text-slate-900">{item.no_sambungan}</td>
-                        <td className="px-4 py-3 text-slate-700">{item.nama}</td>
-                        <td className="px-4 py-3 text-slate-700">
-                          {item.jumlah_bulan_tunggakan} bln
+                        <td className="px-4 py-3">
+                          <p className="font-medium text-slate-900">{item.nama}</p>
+                          <p className="text-xs text-slate-500">{item.no_sambungan}</p>
+                          <p className="text-xs text-slate-500">{item.address || '-'}</p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <p className="font-medium text-slate-900">
+                            {item.jumlah_tagihan != null ? formatRupiah(item.jumlah_tagihan) : '-'}
+                          </p>
+                          <p className="text-xs text-slate-500">{item.jumlah_bulan_tunggakan} bln</p>
                         </td>
                         <td className="px-4 py-3 text-slate-600">{item.petugas?.name ?? '-'}</td>
                         <td className="px-4 py-3">
@@ -773,9 +823,27 @@ export function ArrearsPage() {
                         </td>
                         <td className="px-4 py-3">
                           {item.visit ? (
-                            <HasilBadge hasil={item.visit.status_kunjungan} />
+                            <div>
+                              <HasilBadge hasil={item.visit.status_kunjungan} />
+                              <div className="mt-1">
+                                {item.foto_bukti || item.visit.foto_bukti ? (
+                                  <Badge tone="green">Ada Foto</Badge>
+                                ) : (
+                                  <Badge tone="gray">Tidak Ada Foto</Badge>
+                                )}
+                              </div>
+                            </div>
                           ) : (
-                            <span className="text-slate-400">-</span>
+                            <>
+                              <p className="font-medium text-slate-900">-</p>
+                              <div className="mt-1">
+                                {item.foto_bukti ? (
+                                  <Badge tone="green">Ada Foto</Badge>
+                                ) : (
+                                  <Badge tone="gray">Tidak Ada Foto</Badge>
+                                )}
+                              </div>
+                            </>
                           )}
                         </td>
                         <td className="px-4 py-3 text-slate-600">
@@ -833,6 +901,7 @@ export function ArrearsPage() {
                           <p className="mt-0.5 text-sm text-slate-500">
                             No. Sambungan: {item.no_sambungan}
                           </p>
+                          <p className="mt-0.5 text-sm text-slate-500">{item.address || '-'}</p>
                         </div>
                       </div>
                       <StatusBadge status={item.status} />
@@ -840,7 +909,10 @@ export function ArrearsPage() {
                     <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
                       <div>
                         <p className="text-xs text-slate-400">Tunggakan</p>
-                        <p className="text-slate-700">{item.jumlah_bulan_tunggakan} bln</p>
+                        <p className="font-medium text-slate-900">
+                          {item.jumlah_tagihan != null ? formatRupiah(item.jumlah_tagihan) : '-'}
+                        </p>
+                        <p className="text-xs text-slate-500">{item.jumlah_bulan_tunggakan} bln</p>
                       </div>
                       <div>
                         <p className="text-xs text-slate-400">Petugas</p>
@@ -849,9 +921,27 @@ export function ArrearsPage() {
                       <div>
                         <p className="text-xs text-slate-400">Hasil Kunjungan</p>
                         {item.visit ? (
-                          <HasilBadge hasil={item.visit.status_kunjungan} />
+                          <div>
+                              <HasilBadge hasil={item.visit.status_kunjungan} />
+                              <div className="mt-1">
+                              {item.foto_bukti || item.visit.foto_bukti ? (
+                                <Badge tone="green">Ada Foto</Badge>
+                              ) : (
+                                <Badge tone="gray">Tidak Ada Foto</Badge>
+                              )}
+                            </div>
+                          </div>
                         ) : (
-                          <span className="text-slate-400">-</span>
+                          <>
+                            <p className="font-medium text-slate-900">-</p>
+                            <div className="mt-1">
+                              {item.foto_bukti ? (
+                                <Badge tone="green">Ada Foto</Badge>
+                              ) : (
+                                <Badge tone="gray">Tidak Ada Foto</Badge>
+                              )}
+                            </div>
+                          </>
                         )}
                       </div>
                       <div>

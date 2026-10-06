@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, getErrorMessage } from '../../lib/api'
-import { formatNumber } from '../../lib/format'
+import { formatNumber, formatRupiah } from '../../lib/format'
 import { PageHeader, StatCard, Card } from '../../components/ui/surfaces'
 import { Button } from '../../components/ui/Button'
 import { ErrorState, LoadingState } from '../../components/ui/feedback'
@@ -24,11 +24,12 @@ interface PetugasReviewKPI {
   description?: string
 }
 
-type SortField = 'wilayah_nama' | 'jumlah_surat' | 'bukti_foto' | 'surat_diterima' | 'tidak_ada_orang' | 'rumah_kosong' | 'lainnya' | 'sisa_surat'
+type SortField = 'kode_wilayah' | 'wilayah_nama' | 'total_nominal' | 'jumlah_surat' | 'bukti_foto' | 'surat_diterima' | 'tidak_ada_orang' | 'rumah_kosong' | 'lainnya' | 'sisa_surat'
 type SortDirection = 'asc' | 'desc'
 
 export function PetugasReviewPage() {
   const { petugasId } = useParams<{ petugasId: string }>()
+  const navigate = useNavigate()
 
   const [data, setData] = useState<{
     petugas: { id: number; name: string }
@@ -43,7 +44,10 @@ export function PetugasReviewPage() {
       belum_dikunjungi: number
     }
     by_area: Array<{
+      wilayah_id?: number | null
+      kode_wilayah?: string
       wilayah_nama: string
+      total_nominal: number
       jumlah_surat: number
       bukti_foto: number
       surat_diterima: number
@@ -78,6 +82,11 @@ export function PetugasReviewPage() {
 
   function handleRetry() {
     load()
+  }
+
+  function handleWilayahClick(wilayahId: number | null | undefined) {
+    if (!wilayahId || !petugasId) return
+    navigate(`/admin/arrears?petugas_id=${petugasId}&wilayah_id=${wilayahId}`)
   }
 
   function handleSort(field: SortField) {
@@ -204,10 +213,26 @@ export function PetugasReviewPage() {
             </div>
             {data.by_area && data.by_area.length > 0 ? (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[1100px] text-left text-sm border-collapse table-fixed">
+                <table className="w-full min-w-[1400px] text-left text-sm border-collapse table-fixed">
                   <thead>
                     <tr className="border-b border-slate-200 text-xs text-slate-500">
-                      <th className="px-3 py-3 font-medium cursor-pointer select-none w-[25%]" onClick={() => handleSort('wilayah_nama')}>
+                      <th className="px-3 py-3 font-medium cursor-pointer select-none w-[8%]" onClick={() => handleSort('kode_wilayah')}>
+                        <div className="flex items-center gap-1 whitespace-normal leading-tight">
+                          Kode Wilayah
+                          {sortField === 'kode_wilayah' && (
+                            <span className="ml-1">
+                              {sortDirection === 'asc' ? (
+                                <span className="inline-block transform rotate-180">
+                                  <IconChevronDown className="h-3.5 w-3.5" />
+                                </span>
+                              ) : (
+                                <IconChevronDown className="h-3.5 w-3.5" />
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      </th>
+                      <th className="px-3 py-3 font-medium cursor-pointer select-none w-[18%]" onClick={() => handleSort('wilayah_nama')}>
                         <div className="flex items-center gap-1 whitespace-normal leading-tight">
                           Wilayah Penagihan
                           {sortField === 'wilayah_nama' && (
@@ -223,7 +248,23 @@ export function PetugasReviewPage() {
                           )}
                         </div>
                       </th>
-                      <th className="px-3 py-3 font-medium text-center cursor-pointer select-none w-[10%]" onClick={() => handleSort('jumlah_surat')}>
+                      <th className="px-3 py-3 font-medium text-right cursor-pointer select-none w-[12%]" onClick={() => handleSort('total_nominal')}>
+                        <div className="flex items-center justify-end gap-1 whitespace-normal leading-tight">
+                          Nominal
+                          {sortField === 'total_nominal' && (
+                            <span className="ml-1">
+                              {sortDirection === 'asc' ? (
+                                <span className="inline-block transform rotate-180">
+                                  <IconChevronDown className="h-3.5 w-3.5" />
+                                </span>
+                              ) : (
+                                <IconChevronDown className="h-3.5 w-3.5" />
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      </th>
+                      <th className="px-3 py-3 font-medium text-center cursor-pointer select-none w-[8%]" onClick={() => handleSort('jumlah_surat')}>
                         <div className="flex items-center justify-center gap-1 whitespace-normal leading-tight">
                           Jumlah Surat
                           {sortField === 'jumlah_surat' && (
@@ -239,7 +280,7 @@ export function PetugasReviewPage() {
                           )}
                         </div>
                       </th>
-                      <th className="px-3 py-3 font-medium text-center cursor-pointer select-none w-[9%]" onClick={() => handleSort('bukti_foto')}>
+                      <th className="px-3 py-3 font-medium text-center cursor-pointer select-none w-[8%]" onClick={() => handleSort('bukti_foto')}>
                         <div className="flex items-center justify-center gap-1 whitespace-normal leading-tight">
                           Bukti Foto
                           {sortField === 'bukti_foto' && (
@@ -255,7 +296,7 @@ export function PetugasReviewPage() {
                           )}
                         </div>
                       </th>
-                      <th className="px-3 py-3 font-medium text-center cursor-pointer select-none w-[11%]" onClick={() => handleSort('surat_diterima')}>
+                      <th className="px-3 py-3 font-medium text-center cursor-pointer select-none w-[9%]" onClick={() => handleSort('surat_diterima')}>
                         <div className="flex items-center justify-center gap-1 whitespace-normal leading-tight">
                           Surat Diterima
                           {sortField === 'surat_diterima' && (
@@ -271,7 +312,7 @@ export function PetugasReviewPage() {
                           )}
                         </div>
                       </th>
-                      <th className="px-3 py-3 font-medium text-center cursor-pointer select-none w-[12%]" onClick={() => handleSort('tidak_ada_orang')}>
+                      <th className="px-3 py-3 font-medium text-center cursor-pointer select-none w-[10%]" onClick={() => handleSort('tidak_ada_orang')}>
                         <div className="flex items-center justify-center gap-1 whitespace-normal leading-tight">
                           Tidak Ada Orang
                           {sortField === 'tidak_ada_orang' && (
@@ -287,7 +328,7 @@ export function PetugasReviewPage() {
                           )}
                         </div>
                       </th>
-                      <th className="px-3 py-3 font-medium text-center cursor-pointer select-none w-[11%]" onClick={() => handleSort('rumah_kosong')}>
+                      <th className="px-3 py-3 font-medium text-center cursor-pointer select-none w-[9%]" onClick={() => handleSort('rumah_kosong')}>
                         <div className="flex items-center justify-center gap-1 whitespace-normal leading-tight">
                           Rumah Kosong
                           {sortField === 'rumah_kosong' && (
@@ -303,7 +344,7 @@ export function PetugasReviewPage() {
                           )}
                         </div>
                       </th>
-                      <th className="px-3 py-3 font-medium text-center cursor-pointer select-none w-[13%]" onClick={() => handleSort('lainnya')}>
+                      <th className="px-3 py-3 font-medium text-center cursor-pointer select-none w-[10%]" onClick={() => handleSort('lainnya')}>
                         <div className="flex items-center justify-center gap-1 whitespace-normal leading-tight">
                           Keterangan Lainnya
                           {sortField === 'lainnya' && (
@@ -319,7 +360,7 @@ export function PetugasReviewPage() {
                           )}
                         </div>
                       </th>
-                      <th className="px-3 py-3 font-medium text-center cursor-pointer select-none w-[9%]" onClick={() => handleSort('sisa_surat')}>
+                      <th className="px-3 py-3 font-medium text-center cursor-pointer select-none w-[8%]" onClick={() => handleSort('sisa_surat')}>
                         <div className="flex items-center justify-center gap-1 whitespace-normal leading-tight">
                           Sisa Surat
                           {sortField === 'sisa_surat' && (
@@ -341,8 +382,22 @@ export function PetugasReviewPage() {
                     {sortedByArea.map((item, index) => (
                       <tr key={index} className="hover:bg-slate-50">
                         <td className="px-3 py-3 text-slate-700 font-medium break-words">
-                          {item.wilayah_nama}
+                          {item.kode_wilayah || ''}
                         </td>
+                        <td className="px-3 py-3 text-slate-700 font-medium break-words">
+                          {item.wilayah_id ? (
+                            <button
+                              type="button"
+                              onClick={() => handleWilayahClick(item.wilayah_id)}
+                              className="text-primary-600 hover:text-primary-700 hover:underline text-left"
+                            >
+                              {item.wilayah_nama}
+                            </button>
+                          ) : (
+                            item.wilayah_nama
+                          )}
+                        </td>
+                        <td className="px-3 py-3 text-right text-slate-700 font-medium">{formatRupiah(item.total_nominal)}</td>
                         <td className="px-3 py-3 text-center text-slate-700 font-medium">{formatNumber(item.jumlah_surat)}</td>
                         <td className="px-3 py-3 text-center text-slate-700">{formatNumber(item.bukti_foto)}</td>
                         <td className="px-3 py-3 text-center text-slate-700">{formatNumber(item.surat_diterima)}</td>
@@ -353,7 +408,11 @@ export function PetugasReviewPage() {
                       </tr>
                     ))}
                     <tr className="bg-slate-50 font-semibold">
-                      <td className="px-3 py-3 text-slate-900">TOTAL</td>
+                      <td className="px-3 py-3 text-slate-900"></td>
+                      <td className="px-3 py-3 text-slate-900 font-semibold">TOTAL</td>
+                      <td className="px-3 py-3 text-right text-slate-900 font-semibold">
+                        {formatRupiah(sortedByArea.reduce((sum, item) => sum + item.total_nominal, 0))}
+                      </td>
                       <td className="px-3 py-3 text-center text-slate-900">
                         {formatNumber(sortedByArea.reduce((sum, item) => sum + item.jumlah_surat, 0))}
                       </td>
